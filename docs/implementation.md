@@ -43,6 +43,32 @@ Expected: Parse → Transform → Notify completes in ~2 minutes, 1,359 premium 
 
 ---
 
+## Completed Milestones (Production Ready)
+
+| Milestone | Status | Result |
+|-----------|--------|--------|
+| Schema design with natural keys | ✅ | Iceberg-idiomatic (policy_number + org_code as business keys) |
+| CSV parsing pipeline | ✅ | 8 sequential tasks, 2,191 rows validated, PII hashed |
+| Dimension & fact transforms | ✅ | SCD2/SCD1 MERGE logic, 1,359 facts inserted, natural FKs |
+| Zoom notifications | ✅ | Landing + completion alerts sent to #pipeline-alerts |
+| Comprehensive testing | ✅ | 22 unit + 14 schema + 20+ mart + 23 integration tests passing |
+| End-to-end verification | ✅ | Full DAG execution: ~2 min, 833 policies, 1,359 facts, zero duplicates |
+| Documentation & repo | ✅ | All docs current; GitHub: rajjona-collab/colima-pyspark |
+
+---
+
+## Known Issues (All Resolved)
+
+| Issue | Root Cause | Fix | Status |
+|-------|-----------|-----|--------|
+| fact_premiums had 0 rows | Iceberg has no IDENTITY; policy_key was NULL | Refactored to natural keys (policy_number, org_code) | ✅ |
+| MERGE cardinality violation | Duplicate business keys in staging | Added ROW_NUMBER() dedup in USING clause | ✅ |
+| Data type mismatch in MERGE | Missing org_code in VALUES clause | Added org_code to column list and VALUES | ✅ |
+| Zoom notifications not received | Wrong payload format, missing Authorization header | Implemented {name, level, message} with Authorization header | ✅ |
+| Postgres JDBC connection failed | Empty password from env vars | Added .env/local.env loading at module level | ✅ |
+
+---
+
 ## Architecture
 
 ### Schema Design: Natural Keys
