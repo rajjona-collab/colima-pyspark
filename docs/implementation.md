@@ -321,6 +321,66 @@ kubectl exec -n airflow airflow-scheduler-0 -- \
 
 ---
 
+## Git Repository
+
+### Initial Push to GitHub
+
+**Prerequisites:**
+- GitHub CLI installed: `which gh`
+- Authenticated: `gh auth status`
+- Repository org: `rajjona-collab`
+
+**Setup & Push (one-time):**
+
+```bash
+cd ~/src/colima-pyspark
+
+# 1. Initialize git repo
+git init
+
+# 2. Set git user config (if not already global)
+git config user.email "rajjona@gmail.com"
+git config user.name "Rajani"
+
+# 3. Stage all files
+git add .
+
+# 4. Commit with context
+git commit -m "Initial commit: Iceberg pipeline with natural key schema
+
+- Natural key design: policy_number + org_code as business keys
+- SCD Type 2 for dim_policyholder and dim_policy
+- SCD Type 1 for dim_address and dim_payment_method
+- Fact table dedup via transaction_id
+- Zoom webhook integration for alerts
+- Full test coverage: unit, schema contract, integration, and natural key validation
+- Production-ready with 1,359 premium facts verified"
+
+# 5. Create repo on GitHub and push (single command)
+gh repo create colima-pyspark --public --source=. --remote=origin --push --org rajjona-collab
+```
+
+**Alternative: Manual Push (if repo already exists)**
+
+```bash
+git remote add origin https://github.com/rajjona-collab/colima-pyspark.git
+git branch -M main
+git push -u origin main
+```
+
+### .gitignore
+
+Protects secrets and temporary files:
+- `.env` and `.env/` — credentials
+- `CLAUDE.md` — local instructions
+- `scratch/` — temporary work
+- `__pycache__/`, `*.pyc` — Python cache
+- `.pytest_cache/`, `.coverage`, `htmlcov/` — test artifacts
+- `build/`, `dist/`, `*.egg-info/` — package build artifacts
+- `.DS_Store` — macOS system files
+
+---
+
 ## Rollback & Reset
 
 **Truncate Staging Only** (before re-running parse_csv):
