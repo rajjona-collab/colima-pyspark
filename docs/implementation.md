@@ -357,7 +357,8 @@ git commit -m "Initial commit: Iceberg pipeline with natural key schema
 - Production-ready with 1,359 premium facts verified"
 
 # 5. Create repo on GitHub and push (single command)
-gh repo create colima-pyspark --public --source=. --remote=origin --push --org rajjona-collab
+# Note: Creates repo under authenticated account (rajjona-collab)
+gh repo create colima-pyspark --public --source=. --remote=origin --push
 ```
 
 **Alternative: Manual Push (if repo already exists)**
