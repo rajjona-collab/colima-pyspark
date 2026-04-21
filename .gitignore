@@ -19,7 +19,8 @@ dist/
 htmlcov/
 
 # Scratch/temp work
-scratch/
+scratch/jars/
+.idea
 
 # macOS
 .DS_Store
