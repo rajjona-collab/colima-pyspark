@@ -1,0 +1,22 @@
+{
+  "org": "lnl",
+  "file_type": "basic",
+  "delimiter": ",",
+  "columns": [
+    {"name": "policy_number",  "type": "string",  "nullable": false},
+    {"name": "ssn",            "type": "string",  "nullable": true,  "pii": true},
+    {"name": "first_name",     "type": "string",  "nullable": false},
+    {"name": "last_name",      "type": "string",  "nullable": false},
+    {"name": "dob",            "type": "date",    "nullable": false, "format": "YYYY-MM-DD"},
+    {"name": "gender",         "type": "string",  "nullable": true},
+    {"name": "policy_type",    "type": "string",  "nullable": false},
+    {"name": "policy_status",  "type": "string",  "nullable": false},
+    {"name": "issue_date",     "type": "date",    "nullable": false, "format": "YYYY-MM-DD"},
+    {"name": "face_amount",    "type": "decimal", "nullable": false},
+    {"name": "org_code",       "type": "string",  "nullable": false}
+  ],
+  "not_null_check": ["policy_number", "first_name", "last_name", "dob", "policy_type", "policy_status", "issue_date", "face_amount", "org_code"],
+  "pii_fields": ["ssn"],
+  "ssn_field": "ssn",
+  "match_fallback": ["first_name", "last_name", "dob"]
+}

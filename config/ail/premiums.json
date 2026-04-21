@@ -1,0 +1,15 @@
+{
+  "org": "ail",
+  "file_type": "premiums",
+  "delimiter": ",",
+  "columns": [
+    {"name": "policy_number",  "type": "string",  "nullable": false},
+    {"name": "transaction_id", "type": "string",  "nullable": false},
+    {"name": "premium_date",   "type": "date",    "nullable": false, "format": "YYYY-MM-DD"},
+    {"name": "amount",         "type": "decimal", "nullable": false},
+    {"name": "payment_method", "type": "string",  "nullable": false},
+    {"name": "status",         "type": "string",  "nullable": false},
+    {"name": "org_code",       "type": "string",  "nullable": false}
+  ],
+  "not_null_check": ["policy_number", "transaction_id", "premium_date", "amount", "payment_method", "status", "org_code"]
+}

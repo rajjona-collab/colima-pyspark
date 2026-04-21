@@ -1,0 +1,16 @@
+{
+  "org": "ail",
+  "file_type": "bankinfo",
+  "delimiter": ",",
+  "columns": [
+    {"name": "policy_number",  "type": "string", "nullable": false},
+    {"name": "bank_name",      "type": "string", "nullable": false},
+    {"name": "routing_number", "type": "string", "nullable": false},
+    {"name": "account_number", "type": "string", "nullable": false, "pii": true},
+    {"name": "account_type",   "type": "string", "nullable": false},
+    {"name": "effective_date", "type": "date",   "nullable": false, "format": "YYYY-MM-DD"},
+    {"name": "org_code",       "type": "string", "nullable": false}
+  ],
+  "not_null_check": ["policy_number", "bank_name", "routing_number", "account_number", "account_type", "effective_date", "org_code"],
+  "pii_fields": ["account_number"]
+}

@@ -1,0 +1,17 @@
+{
+  "org": "lnl",
+  "file_type": "address",
+  "delimiter": ",",
+  "columns": [
+    {"name": "policy_number",  "type": "string", "nullable": false},
+    {"name": "address_type",   "type": "string", "nullable": false},
+    {"name": "street1",        "type": "string", "nullable": false},
+    {"name": "street2",        "type": "string", "nullable": true},
+    {"name": "city",           "type": "string", "nullable": false},
+    {"name": "state",          "type": "string", "nullable": false},
+    {"name": "zip",            "type": "string", "nullable": false},
+    {"name": "effective_date", "type": "date",   "nullable": false, "format": "YYYY-MM-DD"},
+    {"name": "org_code",       "type": "string", "nullable": false}
+  ],
+  "not_null_check": ["policy_number", "address_type", "street1", "city", "state", "zip", "effective_date", "org_code"]
+}
