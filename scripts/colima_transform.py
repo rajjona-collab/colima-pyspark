@@ -12,11 +12,23 @@ Usage (in pod):
 """
 
 import os
+import sys
 import glob
 import argparse
+import logging
+import traceback
 from datetime import date
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
+
+# Configure structured logging with level prefix (parseable by Airflow)
+logging.basicConfig(
+    format='[%(levelname)s] %(message)s',
+    level=logging.INFO,
+    stream=sys.stdout,
+    force=True  # Override any existing config
+)
+logger = logging.getLogger(__name__)
 
 # Load env vars from .env/local.env if not already set
 if not os.getenv("POSTGRES_JDBC_URL"):
@@ -57,14 +69,14 @@ def get_spark_session():
 
 def transform_basic(spark, batch_date):
     """Load basic → upsert dim_policyholder, dim_policy (SCD Type 2 via MERGE INTO)."""
-    print(f"\n[BASIC] Transform stg_basic → dim_policyholder + dim_policy (SCD2)")
+    logger.info(f"Transform stg_basic → dim_policyholder + dim_policy (SCD2)")
 
     # Step 1: SCD2 merge for dim_policyholder
     # Business key: COALESCE(ssn_hash, CONCAT(policyholder_name, match_method))
     # Dedup by business_key (one policyholder per batch) using ROW_NUMBER()
     # Match only current records, expire on attribute changes, insert new version
 
-    print("  → Merging dim_policyholder...")
+    logger.info(" Merging dim_policyholder...")
     spark.sql(f"""
         MERGE INTO pg_jdbc_catalog.idm_mart.dim_policyholder t
         USING (
@@ -115,12 +127,12 @@ def transform_basic(spark, batch_date):
                 CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP()
             )
     """)
-    print("  ✓ dim_policyholder merged (SCD2)")
+    logger.info(" dim_policyholder merged (SCD2)")
 
     # Step 2: SCD2 merge for dim_policy
     # Natural key: (policy_number, org_code)
     # Dedup by policy_number within org (ROW_NUMBER) to prevent cardinality violation.
-    print("  → Merging dim_policy...")
+    logger.info(" Merging dim_policy...")
     spark.sql(f"""
         MERGE INTO pg_jdbc_catalog.idm_mart.dim_policy t
         USING (
@@ -164,7 +176,7 @@ def transform_basic(spark, batch_date):
                 CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP()
             )
     """)
-    print("  ✓ dim_policy merged (SCD2)")
+    logger.info(" dim_policy merged (SCD2)")
 
 
 def transform_address(spark, batch_date):
@@ -210,7 +222,7 @@ def transform_address(spark, batch_date):
                 s.zip_code, s.country, TRUE, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP()
             )
     """)
-    print("  ✓ dim_address merged (SCD1)")
+    logger.info(" dim_address merged (SCD1)")
 
 
 def transform_bankinfo(spark, batch_date):
@@ -258,7 +270,7 @@ def transform_bankinfo(spark, batch_date):
                 TRUE, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP()
             )
     """)
-    print("  ✓ dim_payment_method merged (SCD1)")
+    logger.info(" dim_payment_method merged (SCD1)")
 
 
 def transform_premiums(spark, batch_date):
@@ -285,7 +297,7 @@ def transform_premiums(spark, batch_date):
         WHERE p.batch_date = '{batch_date}'
         AND fp.transaction_id IS NULL
     """)
-    print("  ✓ fact_premiums appended (dedup by transaction_id)")
+    logger.info(" fact_premiums appended (dedup by transaction_id)")
 
 
 def main():
@@ -294,7 +306,7 @@ def main():
     args = parser.parse_args()
 
     batch_date = args.batch_date
-    print(f"[START] Transform batch_date={batch_date}")
+    logger.info(f" Transform batch_date={batch_date}")
 
     spark = get_spark_session()
 
@@ -308,7 +320,7 @@ def main():
     except Exception as e:
         print(f"\n[ERROR] {e}")
         import traceback
-        traceback.print_exc()
+        logger.exception("Transform failed")
         raise
     finally:
         spark.stop()

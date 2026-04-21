@@ -441,3 +441,77 @@ python scripts/drop_recreate_marts.py
 **Dedup Audit:** LEFT JOIN dedup logic in fact_premiums prevents duplicate transactions.
 
 **Zoom Alerts:** Critical failures and completion status sent to #pipeline-alerts.
+
+---
+
+## Logging & Observability
+
+### Current Behavior
+KubernetesPodOperator captures all pod stdout/stderr as **INFO level** by default. PySpark ERRORS and WARNINGS appear in Airflow UI under INFO category, making it difficult to filter by actual severity in the logs tab.
+
+### Task: Segregate PySpark Logs by Actual Level in Airflow UI
+
+**Problem:** KubernetesPodOperator limitation — no native way to map pod log levels to Airflow log levels. PySpark errors show as INFO in Airflow task logs.
+
+**Options:**
+
+**1. Structured Logging in PySpark (Recommended)**
+- Add `logging.basicConfig()` to PySpark scripts with level format
+- Output logs as `[ERROR]`, `[WARNING]`, `[INFO]` prefixes
+- Airflow UI can parse and filter by these markers
+- Pros: Simple, minimal code changes
+- Cons: Requires log parsing on Airflow side; may not appear as true severity levels
+- Effort: Low (2 files: colima_parse_csv.py, colima_transform.py)
+- Implementation:
+  ```python
+  import logging
+  logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.INFO)
+  logger = logging.getLogger(__name__)
+  logger.error("Actual error")      # Appears as [ERROR] in logs
+  logger.warning("Actual warning")  # Appears as [WARNING] in logs
+  ```
+
+**2. log4j.properties for Spark (Advanced)**
+- Configure Spark's internal logging via `spark.driver.log4jConf`
+- Upload config file to MinIO, reference in spark-submit
+- Fine-grained control over Spark logger levels
+- Pros: Full Spark logging control, separate config file
+- Cons: More complex, requires MinIO file management
+- Effort: Medium (create config, update scripts/colima_parse_csv.py and scripts/colima_transform.py)
+- Implementation: Create `scratch/log4j.properties`, set in SparkSession builder
+
+**3. Airflow 3.2.0+ Pod Log Handler (Future)**
+- Upgrade Airflow; may natively support stderr→ERROR mapping
+- Zero code changes if supported
+- Pros: Native support, sustainable long-term
+- Cons: Requires Airflow version validation
+- Effort: Low if available, validation required
+- Blockers: None currently
+
+**4. Workaround: Manual Log Search (No Changes)**
+- Use Airflow UI search/grep to find ERROR, WARNING in raw logs
+- No code changes
+- Pros: Zero effort, works immediately
+- Cons: Manual filtering, not ideal for automated monitoring
+- Status: Currently using this approach
+
+**Current Status:** ✅ **IMPLEMENTED** — Option 1 (Structured Logging) complete as of 2026-04-21.
+
+**Implementation Details:**
+- Added `logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.INFO)` to both scripts
+- Replaced all `print()` calls with `logger.debug()`, `logger.info()`, `logger.warning()`, `logger.error()`
+- Files: `scripts/colima_parse_csv.py`, `scripts/colima_transform.py`
+- Logs now output as `[INFO] message`, `[ERROR] message`, etc.
+- Airflow can parse and filter logs by actual severity level in the UI
+
+---
+
+## Next Steps (Optional Enhancements)
+
+Potential improvements (not blockers for production):
+- [x] ✅ Implement structured logging for PySpark (Logging & Observability, Option 1) — COMPLETE 2026-04-21
+- [ ] dbt models for dimensional modeling layer
+- [ ] Data quality tests (row counts, freshness, null checks)
+- [ ] Incremental loads (currently full reloads)
+- [ ] Superset dashboard for mart visualization
+- [ ] Cost optimization (Spark executor tuning, partition pruning)

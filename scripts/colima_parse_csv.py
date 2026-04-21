@@ -17,6 +17,7 @@ Usage (in pod):
 
 import hashlib
 import json
+import logging
 import os
 import re
 import sys
@@ -27,12 +28,21 @@ from pyspark.sql import functions as F
 from pyspark.sql.types import StringType, DateType, DecimalType
 import requests
 
+# Configure structured logging with level prefix (parseable by Airflow)
+logging.basicConfig(
+    format='[%(levelname)s] %(message)s',
+    level=logging.INFO,
+    stream=sys.stdout,
+    force=True  # Override any existing config
+)
+logger = logging.getLogger(__name__)
+
 
 def send_zoom_alert(org, file_type, batch_date, validation_rejected, schema_rejected):
     """Send rejection alert to Zoom webhook (via Slack)."""
     webhook_url = os.environ.get("ZOOM_WEBHOOK_URL")
     if not webhook_url:
-        print(f"[ALERT_SKIPPED] ZOOM_WEBHOOK_URL not set")
+        logger.info(f"Zoom webhook not configured, skipping alert")
         return
 
     message = {
@@ -51,11 +61,11 @@ def send_zoom_alert(org, file_type, batch_date, validation_rejected, schema_reje
     try:
         response = requests.post(webhook_url, json=message, timeout=5)
         if response.status_code == 200:
-            print(f"[ALERT] Sent Zoom notification for {org}/{file_type}")
+            logger.info(f"Zoom notification sent for {org}/{file_type}")
         else:
-            print(f"[ALERT_FAILED] Zoom webhook returned {response.status_code}")
+            logger.warning(f"Zoom webhook failed: status {response.status_code}")
     except Exception as e:
-        print(f"[ALERT_ERROR] Failed to send Zoom alert: {e}")
+        logger.error(f"Failed to send Zoom alert: {e}")
 
 
 def get_spark_session():
@@ -67,8 +77,8 @@ def get_spark_session():
     s3_key = os.environ.get("AWS_ACCESS_KEY_ID")
     s3_secret = os.environ.get("AWS_SECRET_ACCESS_KEY")
 
-    print(f"[DEBUG] Spark config: POSTGRES_URL={postgres_url[:50] if postgres_url else None}...")
-    print(f"[DEBUG] Spark config: S3_ENDPOINT={s3_endpoint}")
+    logger.debug(f" Spark config: POSTGRES_URL={postgres_url[:50] if postgres_url else None}...")
+    logger.debug(f" Spark config: S3_ENDPOINT={s3_endpoint}")
 
     return (SparkSession.builder
         .appName("IcebergParseCSV")
@@ -185,7 +195,7 @@ def main():
     config_path = args.config_path
     s3_input = args.s3_input
 
-    print(f"[START] org={org} file_type={file_type} batch_date={batch_date}")
+    logger.info(f" org={org} file_type={file_type} batch_date={batch_date}")
     print(f"        input={s3_input}")
 
     spark = get_spark_session()
@@ -196,7 +206,7 @@ def main():
     ssn_field = config.get("ssn_field")
     date_cols = [c["name"] for c in config["columns"] if c["type"] == "date"]
 
-    print(f"[CONFIG] columns={col_names}")
+    logger.info(f" columns={col_names}")
 
     # Read CSV
     df_raw = (
@@ -208,7 +218,7 @@ def main():
     )
 
     total_count = df_raw.count()
-    print(f"[READ] {total_count} rows from {s3_input}")
+    logger.info(f" {total_count} rows from {s3_input}")
 
     # Column presence check
     actual_cols = set(df_raw.columns)
@@ -288,7 +298,7 @@ def main():
             )
             .drop(ssn_field)
         )
-        print(f"[SSN] Hashed {ssn_field} → ssn_hash; raw column dropped")
+        logger.info(f" Hashed {ssn_field} → ssn_hash; raw column dropped")
 
     # Audit columns (load_timestamp required by all stg_* tables)
     df = (
@@ -306,7 +316,7 @@ def main():
     valid_count = df_valid.count()
     rejected_count = df_rejected.count()
 
-    print(f"[SPLIT] total={total_count}  valid={valid_count}  rejected={rejected_count}")
+    logger.info(f" total={total_count}  valid={valid_count}  rejected={rejected_count}")
 
     # Cast to proper types
     for _col in config["columns"]:
@@ -335,7 +345,7 @@ def main():
     # Write to Iceberg staging table
     table_name = f"pg_jdbc_catalog.idm_staging.stg_{file_type}"
     schema_mismatch_count = 0
-    print("  ->Truncate stg_{file_type} table...")
+    logger.info("Truncate stg_{file_type} table...")
     spark.sql(f"""
         TRUNCATE TABLE pg_jdbc_catalog.idm_staging.stg_{file_type}              
               """)
@@ -345,11 +355,11 @@ def main():
         df_valid.createOrReplaceTempView("_stg_insert_tmp")
         spark.sql(f"INSERT INTO {table_name} SELECT * FROM _stg_insert_tmp")
         spark.catalog.dropTempView("_stg_insert_tmp")
-        print(f"[WRITE] {valid_count} rows → {table_name}")
+        logger.info(f" {valid_count} rows → {table_name}")
     except Exception as e:
         error_msg = str(e)
         if "too many data columns" in error_msg.lower() or "column arity" in error_msg.lower():
-            print(f"[SCHEMA_MISMATCH] {valid_count} rows cannot be inserted to {table_name}")
+            logger.error(f" {valid_count} rows cannot be inserted to {table_name}")
             schema_mismatch_count = valid_count
             # Write mismatched records to stg_rejected table
             df_mismatch = df_valid.select(
@@ -364,18 +374,18 @@ def main():
                 df_mismatch.createOrReplaceTempView("_stg_reject_tmp")
                 spark.sql("INSERT INTO pg_jdbc_catalog.idm_staging.stg_rejected SELECT * FROM _stg_reject_tmp")
                 spark.catalog.dropTempView("_stg_reject_tmp")
-                print(f"[REJECT_SCHEMA] {valid_count} rows → stg_rejected")
+                logger.error(f"_SCHEMA] {valid_count} rows → stg_rejected")
             except Exception as reject_err:
-                print(f"[REJECT_ERROR] Failed to write to stg_rejected: {reject_err}")
+                logger.error(f"_ERROR] Failed to write to stg_rejected: {reject_err}")
         else:
-            print(f"[ERROR] {error_msg[:200]}")
+            logger.error(f" {error_msg[:200]}")
             raise
 
     # Write validation-rejected to S3
     if rejected_count > 0:
         rejected_path = f"s3://lakehouse/sg-life-idm/rejected/{org}/{file_type}/{batch_date}/"
         df_rejected.write.mode("overwrite").option("header", "true").csv(rejected_path)
-        print(f"[REJECT_VALIDATION] {rejected_count} rows → {rejected_path}")
+        logger.error(f"_VALIDATION] {rejected_count} rows → {rejected_path}")
 
     # Send Zoom alert if there are any rejections
     total_rejected = rejected_count + schema_mismatch_count
